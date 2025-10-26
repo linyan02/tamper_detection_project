@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import torch.nn as nn  # 补充nn模块导入
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from config.paths import MODEL_SAVE_DIR, LOG_DIR
@@ -7,7 +8,9 @@ from config.params import *
 from data.dataset import TamperDataset
 from models.resnet18 import ResNet18Tamper
 from utils.logger import get_logger
-from utils.metrics import accuracy_score
+from utils.metrics import accuracy_score_new
+from torchvision.models import resnet18, ResNet18_Weights  # 导入ResNet18及其权重枚举类
+
 
 logger = get_logger(LOG_DIR / "resnet_train.log")
 
@@ -62,8 +65,8 @@ def train_resnet(epochs=None):
                 val_labels.extend(labels.cpu().numpy())
 
         # 计算指标
-        train_acc = accuracy_score(train_labels, train_preds)
-        val_acc = accuracy_score(val_labels, val_preds)
+        train_acc = accuracy_score_new(train_labels, train_preds)
+        val_acc = accuracy_score_new(val_labels, val_preds)
         logger.info(
             f"Epoch {epoch + 1} - "
             f"Train Loss: {train_loss / len(train_dataset):.4f}, "

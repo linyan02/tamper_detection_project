@@ -4,7 +4,7 @@ from train.train_pscc import train_pscc
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=["resnet18", "pscc_net"], default="resnet18")
+    parser.add_argument("--model", type=str, choices=["pscc_net", "resnet18"], default="resnet18")
     parser.add_argument("--epochs", type=int, default=None)
     args = parser.parse_args()
 

@@ -9,7 +9,7 @@ from config.params import *
 from data.dataset import TamperDataset  # 复用数据集类（需扩展掩码加载）
 from models.pscc_net import PSCCNet
 from utils.logger import get_logger
-from utils.metrics import iou_score, accuracy_score
+from utils.metrics import iou_score, accuracy_score_new
 
 # 初始化日志
 logger = get_logger(LOG_DIR / "pscc_train.log")
@@ -83,7 +83,7 @@ def evaluate(model, val_loader, device):
 
             # 计算分类准确率（根据掩码是否存在判断是否为篡改图像）
             pred_labels = (outputs.sum(dim=(1, 2, 3)) > 0).float()  # 掩码有像素>0则视为篡改
-            total_acc += accuracy_score(labels.cpu().numpy(), pred_labels.cpu().numpy()) * images.size(0)
+            total_acc += accuracy_score_new(labels.cpu().numpy(), pred_labels.cpu().numpy()) * images.size(0)
 
     return {
         "iou": total_iou / len(val_loader.dataset),

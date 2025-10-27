@@ -30,3 +30,4 @@ tmp/
 temp/
 *.swp
 *.swo
+.python-version

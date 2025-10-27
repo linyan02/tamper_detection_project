@@ -39,10 +39,74 @@ class PSCCDataset(TamperDataset):
         """加载篡改区域掩码（0=背景，1=篡改区域）"""
         if label == 0:  # 真实图像，掩码全为0
             return np.zeros((IMAGE_SIZE, IMAGE_SIZE), dtype=np.uint8)
-        # 篡改图像：构建掩码路径（假设与图像路径对应）
-        img_name = img_path.split("/")[-1].split(".")[0]
-        mask_path = str(self.mask_dir / "Tampered" / f"{img_name}_mask.png")
-        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        # 篡改图像：稳健构建掩码路径（兼容 Windows/Unix 路径）
+        from pathlib import Path
+        import re
+
+        p = Path(img_path)
+        stem = p.stem  # 文件名不含扩展
+
+        # 尝试不同的掩码文件夹名（可能为 Tampered 或 tampered）
+        mask_subdirs = [self.mask_dir / "Tampered", self.mask_dir / "tampered"]
+
+        # 首先尝试常见命名：<stem>.png, <stem>_mask.png
+        candidates = []
+        for d in mask_subdirs:
+            candidates.append(d / f"{stem}.png")
+            candidates.append(d / f"{stem}_mask.png")
+
+        mask = None
+        for cand in candidates:
+            if cand.exists():
+                mask = cv2.imread(str(cand), cv2.IMREAD_GRAYSCALE)
+                if mask is not None:
+                    break
+
+        # 如果没有直接匹配，尝试基于数字 id 的匹配（从文件名提取数字序列）
+        if mask is None:
+            digits = re.findall(r"\d+", stem)
+            if digits:
+                # 构建所有现有掩码 stems索引以便快速查找
+                all_mask_stems = []
+                mask_paths = []
+                for d in mask_subdirs:
+                    if d.exists():
+                        for mf in d.iterdir():
+                            if mf.is_file() and mf.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                                all_mask_stems.append(mf.stem)
+                                mask_paths.append(mf)
+
+                # 查找包含数字串的掩码名
+                found = False
+                for num in digits:
+                    for ms, mp in zip(all_mask_stems, mask_paths):
+                        if num in ms:
+                            mask = cv2.imread(str(mp), cv2.IMREAD_GRAYSCALE)
+                            if mask is not None:
+                                found = True
+                                break
+                    if found:
+                        break
+
+        # 最后尝试模糊匹配（掩码名包含图像名或反之）
+        if mask is None:
+            for d in mask_subdirs:
+                if d.exists():
+                    for mf in d.iterdir():
+                        if mf.is_file() and mf.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                            mstem = mf.stem
+                            if mstem in stem or stem in mstem:
+                                mask = cv2.imread(str(mf), cv2.IMREAD_GRAYSCALE)
+                                if mask is not None:
+                                    break
+                    if mask is not None:
+                        break
+
+        if mask is None:
+            logger.warning(f"掩码不存在或无法读取，使用空掩码。Checked candidates: {candidates}")
+            return np.zeros((IMAGE_SIZE, IMAGE_SIZE), dtype=np.uint8)
+
+        # 若读取成功，再进行 resize 和二值化
         mask = cv2.resize(mask, (IMAGE_SIZE, IMAGE_SIZE))
         return (mask > 127).astype(np.uint8)  # 二值化（0或1）
 
@@ -66,31 +130,49 @@ def evaluate(model, val_loader, device):
     """评估模型在验证集上的性能（IoU和分类准确率）"""
     model.eval()
     total_iou = 0.0
+    total_tampered = 0
     total_acc = 0.0
     with torch.no_grad():
         for images, labels, masks in val_loader:
             images, labels, masks = images.to(device), labels.to(device), masks.to(device)
-            outputs = model(images)  # PSCC-Net输出掩码预测
+            outputs = model(images)  # logits
+            probs = torch.sigmoid(outputs)  # 转为概率
+            pred_mask = (probs > THRESHOLD).float()
 
-            # 计算IoU（仅针对篡改图像）
-            tamper_mask = (labels == 1).float().unsqueeze(1)  # 标记哪些样本是篡改图像
-            pred_mask = (outputs > THRESHOLD).float()
-            iou = iou_score(
-                (masks * tamper_mask).cpu().numpy(),
-                (pred_mask * tamper_mask).cpu().numpy()
-            )
-            total_iou += iou * images.size(0)
+            # per-sample IoU，仅对 label==1 的图片计算并累加
+            for i in range(images.size(0)):
+                if labels[i].item() == 1:
+                    mt = masks[i].cpu().numpy()
+                    mp = pred_mask[i].cpu().numpy()
+                    iou = iou_score(mt, mp)
+                    total_iou += iou
+                    total_tampered += 1
 
             # 计算分类准确率（根据掩码是否存在判断是否为篡改图像）
-            pred_labels = (outputs.sum(dim=(1, 2, 3)) > 0).float()  # 掩码有像素>0则视为篡改
+            pred_labels = (probs.view(probs.size(0), -1).sum(dim=1) > 0).float()
             total_acc += accuracy_score_new(labels.cpu().numpy(), pred_labels.cpu().numpy()) * images.size(0)
 
+    mean_iou = (total_iou / total_tampered) if total_tampered > 0 else 0.0
     return {
-        "iou": total_iou / len(val_loader.dataset),
+        "iou": mean_iou,
         "acc": total_acc / len(val_loader.dataset)
     }
 
+class DiceBCELoss(torch.nn.Module):
+    def __init__(self, smooth=1e-6):
+        super().__init__()
+        self.smooth = smooth
 
+    def forward(self, pred_logits, target):
+        # pred_logits: 模型原始输出（logits）
+        pred_probs = torch.sigmoid(pred_logits)
+        # Dice loss 使用概率
+        intersection = (pred_probs * target).sum()
+        dice = 1 - (2. * intersection + self.smooth) / (pred_probs.sum() + target.sum() + self.smooth)
+        # 对数值稳定的 BCE 使用 BCEWithLogitsLoss（直接接受 logits）
+        bce = torch.nn.BCEWithLogitsLoss()(pred_logits, target)
+        return dice + bce
+    
 def train_pscc(epochs=None, quick_mode=False):
     """训练PSCC-Net模型（支持快速模式，适配短周期项目）"""
     epochs = epochs or (10 if quick_mode else PSCC_EPOCHS)
@@ -162,8 +244,8 @@ def train_pscc(epochs=None, quick_mode=False):
             best_iou = val_metrics["iou"]
             save_path = MODEL_SAVE_DIR / "pscc_net_best.pth"
             torch.save(model.state_dict(), save_path)
-            logger.info(f"✅ 最优模型已保存至：{save_path}（IoU：{best_iou:.4f}）")
+            logger.info(f"✅ 最优模型已保存至：{save_path}(IoU:{best_iou:.4f})")
 
         scheduler.step()
 
-    logger.info(f"训练完成！最佳验证IoU：{best_iou:.4f}")
+    logger.info(f"训练完成! 最佳验证IoU: {best_iou:.4f}")

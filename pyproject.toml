@@ -1,0 +1,57 @@
+[project]
+name = "tamper-detection-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "albumentations>=2.0.8",
+    "gradio>=5.49.1",
+    "matplotlib>=3.10.7",
+    "opencv-python>=4.12.0.88",
+    "pandas>=2.3.3",
+    "python-dotenv>=1.1.1",
+    "scikit-learn>=1.7.2",
+    "torch",
+    "torchvision",
+]
+
+# GPU 版本配置 (CUDA 12.6)
+# 如果使用 GPU，保持以下配置
+[tool.uv.sources]
+torchvision = { index = "pytorch-cu126" }
+torch = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+# ============================================
+# 其他 CUDA 版本配置说明
+# ============================================
+# 如果需要安装其他 CUDA 版本（如 CUDA 12.8），
+# 请将上面所有的 "126" 替换为对应版本号 "128"：
+#
+# [tool.uv.sources]
+# torchvision = { index = "pytorch-cu128" }
+# torch = { index = "pytorch-cu128" }
+#
+# [[tool.uv.index]]
+# name = "pytorch-cu128"
+# url = "https://download.pytorch.org/whl/cu128"
+# explicit = true
+#
+# 支持的 CUDA 版本请参考: https://pytorch.org/get-started/locally/
+# 然后运行: uv sync
+# ============================================
+
+# ============================================
+# CPU 版本配置说明
+# ============================================
+# 如果只使用 CPU（无 GPU 或 CUDA），直接删除上面的 
+# [tool.uv.sources] 和 [[tool.uv.index]] 部分即可
+# 
+# uv 会自动从 PyPI 安装 CPU 版本的 PyTorch
+# 然后运行: uv sync
+# ============================================

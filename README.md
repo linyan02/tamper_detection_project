@@ -123,7 +123,7 @@ resources/
 python train.py --model resnet18 --epochs 15
 
 # 训练PSCC-Net（进阶模型）
-python train.py --model pscc_net --epochs 20
+python train.py --model pscc_net --epochs 5
 
 # 训练参数说明：
 # --model: 选择模型类型 (resnet18 或 pscc_net)

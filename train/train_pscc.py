@@ -158,6 +158,7 @@ def evaluate(model, val_loader, device):
         "acc": total_acc / len(val_loader.dataset)
     }
 
+
 class DiceBCELoss(torch.nn.Module):
     def __init__(self, smooth=1e-6):
         super().__init__()
@@ -172,7 +173,8 @@ class DiceBCELoss(torch.nn.Module):
         # 对数值稳定的 BCE 使用 BCEWithLogitsLoss（直接接受 logits）
         bce = torch.nn.BCEWithLogitsLoss()(pred_logits, target)
         return dice + bce
-    
+
+
 def train_pscc(epochs=None, quick_mode=False):
     """训练PSCC-Net模型（支持快速模式，适配短周期项目）"""
     epochs = epochs or (10 if quick_mode else PSCC_EPOCHS)

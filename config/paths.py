@@ -16,6 +16,9 @@ MODEL_SAVE_DIR = OUTPUTS_DIR / "models"
 LOG_DIR = OUTPUTS_DIR / "logs"
 VIS_DIR = OUTPUTS_DIR / "visualizations"
 
+# 处理的文件大小
+IMAGE_SIZE = 256
+
 # 创建目录
 for dir_path in [MODEL_SAVE_DIR, LOG_DIR, VIS_DIR]:
     dir_path.mkdir(parents=True, exist_ok=True)

@@ -96,6 +96,7 @@ pip install -r requirements.txt
 
 将数据集与预训练权重放入 `resources/` 目录：
 
+新增加了一个数据集dataset4，其中每种类型的篡改图片都有了，也将掩码图的图片格式的后缀都修改为.png的格式（2025-10-28）
 ```
 resources/
 ├── dataset/
@@ -178,6 +179,7 @@ tamper_detection_project/
 │   └── visualizations/ # 可视化结果
 ├── resources/          # 资源文件
 │   ├── dataset/        # 数据集
+│   ├── dataset4/        # 第二个版本的数据集（每种类型的篡改图片都有了，也将掩码图的图片格式的后缀都修改为.png的格式）
 │   └── pretrained_weights/  # 预训练权重
 ├── tests/              # 测试文件
 ├── main.py             # 主程序入口
